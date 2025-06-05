@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,38 +24,27 @@ const Index = () => {
 
   const generateCredentials = (companyName: string): { username: string; password: string } => {
     // Limpar o nome da empresa
-    const cleanName = companyName.trim().toUpperCase();
+    const cleanName = companyName.trim();
     
-    // Gerar username
-    const words = cleanName.split(/\s+/);
-    let username = '';
+    // Gerar username - usar nome completo sem abreviações
+    let username = cleanName
+      .replace(/[^\w\s]/g, '') // Remove pontuação
+      .replace(/\s+/g, '.') // Substitui espaços por pontos
+      .toUpperCase();
     
-    // Se tem palavras curtas (iniciais), usar elas
-    const initials = words.filter(word => word.length <= 3);
-    const longWords = words.filter(word => word.length > 3);
-    
-    if (initials.length > 0 && longWords.length > 0) {
-      // Combinar iniciais + primeira palavra longa
-      username = initials.join('') + '.' + longWords[0];
-    } else if (longWords.length >= 2) {
-      // Usar primeiras duas palavras longas
-      username = longWords[0] + '.' + longWords[1];
-    } else if (longWords.length === 1) {
-      // Usar apenas a palavra longa
-      username = longWords[0];
-    } else {
-      // Usar todas as iniciais
-      username = initials.join('.');
-    }
-    
-    // Limitar a 15 caracteres
+    // Limitar a 15 caracteres cortando se necessário
     if (username.length > 15) {
       username = username.substring(0, 15);
+      // Remove ponto no final se houver
+      if (username.endsWith('.')) {
+        username = username.substring(0, 14);
+      }
     }
     
     // Gerar senha
-    const firstLongWord = longWords[0] || words[0];
-    let passwordBase = firstLongWord.charAt(0).toUpperCase() + firstLongWord.slice(1).toLowerCase();
+    const words = cleanName.split(/\s+/);
+    const firstWord = words[0];
+    let passwordBase = firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
     
     // Limitar para caber @123 (máximo 12 caracteres total)
     const maxPasswordBaseLength = 12 - 4; // 4 = "@123".length
@@ -130,9 +118,12 @@ const Index = () => {
       <div className="container mx-auto px-4 py-8">
         {/* Header com Logo */}
         <div className="flex items-center mb-8">
-          <div className="w-[150px] h-[60px] bg-[#117A57] rounded-lg flex items-center justify-center mr-6">
-            <Key className="text-white w-8 h-8 mr-2" />
-            <span className="text-white font-bold text-xl">LOGO</span>
+          <div className="w-[150px] h-[60px] mr-6 flex items-center">
+            <img 
+              src="/lovable-uploads/97b4ddf8-3252-4cff-9f32-4895d75ca399.png" 
+              alt="LAES Logo" 
+              className="h-full w-auto object-contain"
+            />
           </div>
           <div>
             <h1 className="text-3xl font-bold text-[#0E4A36] mb-2">
