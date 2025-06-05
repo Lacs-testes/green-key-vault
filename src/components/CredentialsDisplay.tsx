@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Copy, Check, User, Lock, Building2 } from 'lucide-react';
+import { Copy, Check, User, Lock, Building2, Badge } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface CompanyRecord {
@@ -13,6 +13,7 @@ interface CompanyRecord {
   username: string;
   password: string;
   createdAt: string;
+  userModel: 1 | 2;
 }
 
 interface CredentialsDisplayProps {
@@ -51,6 +52,10 @@ const CredentialsDisplay: React.FC<CredentialsDisplayProps> = ({ record }) => {
         <CardTitle className="flex items-center gap-2">
           <Lock className="w-5 h-5" />
           Credenciais Geradas
+          <div className="ml-auto flex items-center gap-1 text-sm">
+            <Badge className="w-4 h-4" />
+            Modelo {record.userModel}
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="p-6 space-y-6">
