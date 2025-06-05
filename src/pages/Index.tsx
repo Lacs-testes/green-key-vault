@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Search, Copy, History, Key, User } from 'lucide-react';
+import { Search, Copy, History, Key } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import CompanyForm from '@/components/CompanyForm';
 import CredentialsDisplay from '@/components/CredentialsDisplay';
@@ -16,16 +16,14 @@ interface CompanyRecord {
   username: string;
   password: string;
   createdAt: string;
-  userModel: 1 | 2; // Modelo 1 (normal) ou Modelo 2 (com 3288)
 }
 
 const Index = () => {
   const [currentRecord, setCurrentRecord] = useState<CompanyRecord | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [selectedUserModel, setSelectedUserModel] = useState<1 | 2>(1);
   const { toast } = useToast();
 
-  const generateCredentials = (companyName: string, userModel: 1 | 2): { username: string; password: string } => {
+  const generateCredentials = (companyName: string): { username: string; password: string } => {
     // Limpar o nome da empresa
     const cleanName = companyName.trim();
     
@@ -35,25 +33,12 @@ const Index = () => {
       .replace(/\s+/g, '.') // Substitui espaços por pontos
       .toUpperCase();
     
-    // Para modelo 2, adicionar 3288 no final
-    if (userModel === 2) {
-      const maxLength = 15 - 4; // 4 = "3288".length
-      if (username.length > maxLength) {
-        username = username.substring(0, maxLength);
-        // Remove ponto no final se houver
-        if (username.endsWith('.')) {
-          username = username.substring(0, maxLength - 1);
-        }
-      }
-      username += '3288';
-    } else {
-      // Limitar a 15 caracteres cortando se necessário
-      if (username.length > 15) {
-        username = username.substring(0, 15);
-        // Remove ponto no final se houver
-        if (username.endsWith('.')) {
-          username = username.substring(0, 14);
-        }
+    // Limitar a 15 caracteres cortando se necessário
+    if (username.length > 15) {
+      username = username.substring(0, 15);
+      // Remove ponto no final se houver
+      if (username.endsWith('.')) {
+        username = username.substring(0, 14);
       }
     }
     
@@ -73,14 +58,13 @@ const Index = () => {
     return { username, password };
   };
 
-  const saveToHistory = (companyName: string, username: string, password: string, userModel: 1 | 2): CompanyRecord => {
+  const saveToHistory = (companyName: string, username: string, password: string): CompanyRecord => {
     const record: CompanyRecord = {
       id: Date.now().toString(),
       companyName,
       username,
       password,
-      createdAt: new Date().toISOString(),
-      userModel
+      createdAt: new Date().toISOString()
     };
     
     const history = getHistory();
@@ -95,11 +79,10 @@ const Index = () => {
     return stored ? JSON.parse(stored) : [];
   };
 
-  const searchInHistory = (companyName: string, userModel: 1 | 2): CompanyRecord | null => {
+  const searchInHistory = (companyName: string): CompanyRecord | null => {
     const history = getHistory();
     return history.find(record => 
-      record.companyName.toLowerCase() === companyName.toLowerCase() && 
-      record.userModel === userModel
+      record.companyName.toLowerCase() === companyName.toLowerCase()
     ) || null;
   };
 
@@ -139,7 +122,7 @@ const Index = () => {
 
   const handleCompanySubmit = (companyName: string) => {
     // Verificar se já existe no histórico
-    const existingRecord = searchInHistory(companyName, selectedUserModel);
+    const existingRecord = searchInHistory(companyName);
     
     if (existingRecord) {
       setCurrentRecord(existingRecord);
@@ -149,8 +132,8 @@ const Index = () => {
       });
     } else {
       // Gerar novas credenciais
-      const { username, password } = generateCredentials(companyName, selectedUserModel);
-      const newRecord = saveToHistory(companyName, username, password, selectedUserModel);
+      const { username, password } = generateCredentials(companyName);
+      const newRecord = saveToHistory(companyName, username, password);
       setCurrentRecord(newRecord);
       toast({
         title: "Credenciais geradas",
@@ -190,46 +173,6 @@ const Index = () => {
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Formulário Principal */}
           <div className="space-y-6">
-            {/* Seleção do Modelo de Usuário */}
-            <Card className="border-[#AAD1C2] shadow-lg">
-              <CardHeader className="bg-[#117A57] text-white">
-                <CardTitle className="flex items-center gap-2">
-                  <User className="w-5 h-5" />
-                  Modelo de Usuário
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <Button
-                    onClick={() => setSelectedUserModel(1)}
-                    variant={selectedUserModel === 1 ? "default" : "outline"}
-                    className={selectedUserModel === 1 
-                      ? "bg-[#117A57] hover:bg-[#0E4A36] text-white" 
-                      : "border-[#117A57] text-[#117A57] hover:bg-[#AAD1C2]/20"
-                    }
-                  >
-                    Modelo 1
-                  </Button>
-                  <Button
-                    onClick={() => setSelectedUserModel(2)}
-                    variant={selectedUserModel === 2 ? "default" : "outline"}
-                    className={selectedUserModel === 2 
-                      ? "bg-[#117A57] hover:bg-[#0E4A36] text-white" 
-                      : "border-[#117A57] text-[#117A57] hover:bg-[#AAD1C2]/20"
-                    }
-                  >
-                    Modelo 2 (3288)
-                  </Button>
-                </div>
-                <p className="text-sm text-[#333333] mt-2 text-center">
-                  {selectedUserModel === 1 
-                    ? "Usuário padrão" 
-                    : "Usuário com terminação 3288"
-                  }
-                </p>
-              </CardContent>
-            </Card>
-
             <CompanyForm onSubmit={handleCompanySubmit} />
             
             <Card className="border-[#AAD1C2] shadow-lg">

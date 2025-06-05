@@ -11,7 +11,6 @@ interface CompanyRecord {
   username: string;
   password: string;
   createdAt: string;
-  userModel: 1 | 2;
 }
 
 interface HistorySearchProps {
@@ -156,7 +155,7 @@ const HistorySearch: React.FC<HistorySearchProps> = ({ history, onSelect, onDele
                         {record.companyName}
                       </div>
                       <div className="text-xs text-[#333333] mt-1">
-                        Usuário: {record.username} | Modelo: {record.userModel}
+                        Usuário: {record.username}
                       </div>
                       <div className="text-sm text-[#333333] flex items-center gap-1 mt-1">
                         <Clock className="w-3 h-3" />
