@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -148,6 +147,10 @@ const Index = () => {
     setShowHistory(false);
   };
 
+  const openHistoryPage = () => {
+    window.open('/historico.html', '_blank');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-[#AAD1C2]/20">
       <div className="container mx-auto px-4 py-8">
@@ -182,7 +185,7 @@ const Index = () => {
                   Histórico
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4">
+              <CardContent className="p-4 space-y-4">
                 <Button
                   onClick={() => setShowHistory(!showHistory)}
                   variant="outline"
@@ -190,6 +193,14 @@ const Index = () => {
                 >
                   <Search className="w-4 h-4 mr-2" />
                   Buscar no Histórico
+                </Button>
+                
+                <Button
+                  onClick={openHistoryPage}
+                  className="w-full bg-[#0E4A36] hover:bg-[#117A57] text-white"
+                >
+                  <History className="w-4 h-4 mr-2" />
+                  Ver Histórico Completo
                 </Button>
                 
                 {showHistory && (
