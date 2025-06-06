@@ -1,165 +1,173 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, Check, AlertCircle } from 'lucide-react';
+import { Settings, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { googleSheetsService } from '@/services/googleSheetsService';
 
 interface GoogleSheetsConfigProps {
-  onConfigChange: (isConfigured: boolean) => void;
+  onConfigChange: (configured: boolean) => void;
 }
 
 const GoogleSheetsConfig: React.FC<GoogleSheetsConfigProps> = ({ onConfigChange }) => {
-  const [apiKey, setApiKey] = useState('');
-  const [spreadsheetId, setSpreadsheetId] = useState('');
-  const [isConfigured, setIsConfigured] = useState(googleSheetsService.isConfigured());
-  const [isLoading, setIsLoading] = useState(false);
+  const [webAppUrl, setWebAppUrl] = useState('');
+  const [isConfigured, setIsConfigured] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const { toast } = useToast();
 
-  const handleSave = async () => {
-    if (!apiKey.trim() || !spreadsheetId.trim()) {
+  useEffect(() => {
+    const configured = googleSheetsService.isConfigured();
+    setIsConfigured(configured);
+    onConfigChange(configured);
+    
+    if (configured) {
+      setWebAppUrl(localStorage.getItem('google_apps_script_url') || '');
+    }
+  }, [onConfigChange]);
+
+  const validateAndSave = async () => {
+    if (!webAppUrl.trim()) {
       toast({
         title: "Erro",
-        description: "Por favor, preencha todos os campos.",
+        description: "Por favor, insira a URL do Google Apps Script.",
         variant: "destructive",
       });
       return;
     }
 
-    setIsLoading(true);
+    setIsValidating(true);
+    
     try {
-      googleSheetsService.setCredentials(apiKey.trim(), spreadsheetId.trim());
+      googleSheetsService.setWebAppUrl(webAppUrl.trim());
       
-      // Tentar inicializar a planilha
-      await googleSheetsService.initializeSheet();
+      // Tentar fazer uma requisição de teste
+      await googleSheetsService.getAllRecords();
       
       setIsConfigured(true);
       onConfigChange(true);
       
       toast({
-        title: "Configuração salva",
-        description: "Integração com Google Sheets configurada com sucesso!",
+        title: "Sucesso",
+        description: "Conexão com Google Sheets configurada com sucesso!",
       });
-      
-      // Limpar os campos
-      setApiKey('');
-      setSpreadsheetId('');
     } catch (error) {
+      console.error('Erro ao validar configuração:', error);
       toast({
-        title: "Erro na configuração",
-        description: "Verifique as credenciais e tente novamente.",
+        title: "Erro de conexão",
+        description: "Não foi possível conectar com o Google Apps Script. Verifique a URL e tente novamente.",
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsValidating(false);
     }
   };
 
-  const handleDisconnect = () => {
-    localStorage.removeItem('google_sheets_api_key');
-    localStorage.removeItem('google_sheets_id');
+  const disconnect = () => {
+    localStorage.removeItem('google_apps_script_url');
+    setWebAppUrl('');
     setIsConfigured(false);
     onConfigChange(false);
     
     toast({
       title: "Desconectado",
-      description: "Integração com Google Sheets removida.",
+      description: "Google Sheets desconectado. Os dados serão salvos localmente.",
     });
   };
 
-  if (isConfigured) {
-    return (
-      <Card className="border-[#AAD1C2] shadow-lg">
-        <CardHeader className="bg-[#117A57] text-white">
-          <CardTitle className="flex items-center gap-2">
-            <Check className="w-5 h-5" />
-            Google Sheets Conectado
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-[#333333]">
-              Dados sendo sincronizados com Google Sheets
-            </p>
-            <Button
-              onClick={handleDisconnect}
-              variant="outline"
-              className="border-red-500 text-red-500 hover:bg-red-50"
-            >
-              Desconectar
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const openInstructions = () => {
+    window.open('https://script.google.com', '_blank');
+  };
 
   return (
     <Card className="border-[#AAD1C2] shadow-lg">
       <CardHeader className="bg-[#117A57] text-white">
         <CardTitle className="flex items-center gap-2">
           <Settings className="w-5 h-5" />
-          Configurar Google Sheets
+          Configuração Google Sheets
+          {isConfigured && <CheckCircle2 className="w-5 h-5 text-green-200" />}
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-4 space-y-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5" />
-            <div className="text-sm text-blue-800">
-              <p className="font-medium mb-1">Como configurar:</p>
-              <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Acesse o Google Cloud Console</li>
-                <li>Ative a API do Google Sheets</li>
-                <li>Crie uma API Key</li>
-                <li>Crie uma planilha no Google Sheets</li>
-                <li>Copie o ID da planilha da URL</li>
+      <CardContent className="p-6 space-y-4">
+        {isConfigured ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-green-700">
+              <CheckCircle2 className="w-5 h-5" />
+              <span className="font-medium">Conectado ao Google Sheets</span>
+            </div>
+            <div className="text-sm text-[#333333]">
+              <strong>URL configurada:</strong>
+              <div className="font-mono text-xs bg-[#AAD1C2]/20 p-2 rounded mt-1 break-all">
+                {webAppUrl}
+              </div>
+            </div>
+            <Button
+              onClick={disconnect}
+              variant="outline"
+              className="w-full border-red-500 text-red-500 hover:bg-red-50"
+            >
+              Desconectar Google Sheets
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-start gap-2 text-amber-700 bg-amber-50 p-3 rounded">
+              <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <strong>Google Sheets não configurado.</strong>
+                <br />
+                Configure para sincronizar automaticamente os dados.
+              </div>
+            </div>
+            
+            <div>
+              <Label htmlFor="webAppUrl" className="text-[#0E4A36] font-medium">
+                URL do Google Apps Script Web App
+              </Label>
+              <Input
+                id="webAppUrl"
+                type="url"
+                value={webAppUrl}
+                onChange={(e) => setWebAppUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec"
+                className="mt-2 border-[#AAD1C2] focus:border-[#117A57]"
+              />
+              <p className="text-xs text-[#333333] mt-1">
+                Cole aqui a URL do Web App do seu Google Apps Script
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={validateAndSave}
+                disabled={isValidating}
+                className="flex-1 bg-[#117A57] hover:bg-[#0E4A36] text-white"
+              >
+                {isValidating ? 'Validando...' : 'Conectar'}
+              </Button>
+              <Button
+                onClick={openInstructions}
+                variant="outline"
+                className="border-[#117A57] text-[#117A57] hover:bg-[#AAD1C2]/20"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="text-xs text-[#333333] bg-[#AAD1C2]/10 p-3 rounded">
+              <strong>Como configurar:</strong>
+              <ol className="list-decimal list-inside mt-2 space-y-1">
+                <li>Crie uma nova planilha no Google Sheets</li>
+                <li>Abra o Google Apps Script (script.google.com)</li>
+                <li>Cole o código do Apps Script fornecido</li>
+                <li>Publique como Web App</li>
+                <li>Cole a URL aqui</li>
               </ol>
             </div>
           </div>
-        </div>
-
-        <div>
-          <Label htmlFor="apiKey" className="text-[#0E4A36] font-medium">
-            API Key do Google
-          </Label>
-          <Input
-            id="apiKey"
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="AIzaSy..."
-            className="mt-2 border-[#AAD1C2] focus:border-[#117A57]"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="spreadsheetId" className="text-[#0E4A36] font-medium">
-            ID da Planilha
-          </Label>
-          <Input
-            id="spreadsheetId"
-            type="text"
-            value={spreadsheetId}
-            onChange={(e) => setSpreadsheetId(e.target.value)}
-            placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-            className="mt-2 border-[#AAD1C2] focus:border-[#117A57]"
-          />
-          <p className="text-xs text-[#333333] mt-1">
-            Copie da URL: docs.google.com/spreadsheets/d/<strong>ID_AQUI</strong>/edit
-          </p>
-        </div>
-
-        <Button
-          onClick={handleSave}
-          disabled={isLoading}
-          className="w-full bg-[#117A57] hover:bg-[#0E4A36] text-white"
-        >
-          {isLoading ? 'Configurando...' : 'Salvar Configuração'}
-        </Button>
+        )}
       </CardContent>
     </Card>
   );

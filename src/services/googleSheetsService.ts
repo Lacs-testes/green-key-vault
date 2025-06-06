@@ -9,87 +9,40 @@ interface CompanyRecord {
 }
 
 class GoogleSheetsService {
-  private apiKey: string;
-  private spreadsheetId: string;
-  private range: string = 'Sheet1!A:F';
+  private webAppUrl: string;
 
   constructor() {
-    this.apiKey = localStorage.getItem('google_sheets_api_key') || '';
-    this.spreadsheetId = localStorage.getItem('google_sheets_id') || '';
+    this.webAppUrl = localStorage.getItem('google_apps_script_url') || '';
   }
 
-  setCredentials(apiKey: string, spreadsheetId: string) {
-    this.apiKey = apiKey;
-    this.spreadsheetId = spreadsheetId;
-    localStorage.setItem('google_sheets_api_key', apiKey);
-    localStorage.setItem('google_sheets_id', spreadsheetId);
+  setWebAppUrl(url: string) {
+    this.webAppUrl = url;
+    localStorage.setItem('google_apps_script_url', url);
   }
 
   isConfigured(): boolean {
-    return !!(this.apiKey && this.spreadsheetId);
-  }
-
-  private async makeRequest(method: string, endpoint: string, body?: any) {
-    const baseUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
-    const url = `${baseUrl}/${this.spreadsheetId}${endpoint}?key=${this.apiKey}`;
-
-    const options: RequestInit = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    };
-
-    if (body) {
-      options.body = JSON.stringify(body);
-    }
-
-    const response = await fetch(url, options);
-    
-    if (!response.ok) {
-      throw new Error(`Google Sheets API error: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
-  async initializeSheet(): Promise<void> {
-    try {
-      // Criar cabeçalhos se a planilha estiver vazia
-      const headers = [
-        ['ID', 'Nome da Empresa', 'Usuário', 'Senha', 'Data de Criação', 'Última Alteração']
-      ];
-
-      await this.makeRequest('PUT', `/values/${this.range}`, {
-        range: 'Sheet1!A1:F1',
-        majorDimension: 'ROWS',
-        values: headers
-      });
-    } catch (error) {
-      console.error('Erro ao inicializar planilha:', error);
-      throw error;
-    }
+    return !!this.webAppUrl;
   }
 
   async getAllRecords(): Promise<CompanyRecord[]> {
+    if (!this.isConfigured()) {
+      throw new Error('Google Apps Script URL não configurado');
+    }
+
     try {
-      const response = await this.makeRequest('GET', `/values/${this.range}`);
-      
-      if (!response.values || response.values.length <= 1) {
-        return [];
+      const response = await fetch(`${this.webAppUrl}?action=getRecords`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na requisição: ${response.statusText}`);
       }
 
-      // Pular o cabeçalho (primeira linha)
-      const rows = response.values.slice(1);
-      
-      return rows.map((row: string[]) => ({
-        id: row[0] || '',
-        companyName: row[1] || '',
-        username: row[2] || '',
-        password: row[3] || '',
-        createdAt: row[4] || '',
-        updatedAt: row[5] || undefined
-      })).filter(record => record.id); // Filtrar linhas vazias
+      const data = await response.json();
+      return data.records || [];
     } catch (error) {
       console.error('Erro ao buscar registros:', error);
       throw error;
@@ -97,22 +50,30 @@ class GoogleSheetsService {
   }
 
   async addRecord(record: CompanyRecord): Promise<void> {
-    try {
-      const values = [[
-        record.id,
-        record.companyName,
-        record.username,
-        record.password,
-        record.createdAt,
-        record.updatedAt || ''
-      ]];
+    if (!this.isConfigured()) {
+      throw new Error('Google Apps Script URL não configurado');
+    }
 
-      await this.makeRequest('POST', `/values/${this.range}:append`, {
-        range: this.range,
-        majorDimension: 'ROWS',
-        values: values,
-        valueInputOption: 'RAW'
+    try {
+      const response = await fetch(this.webAppUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'addRecord',
+          record: record
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error(`Erro na requisição: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao adicionar registro');
+      }
     } catch (error) {
       console.error('Erro ao adicionar registro:', error);
       throw error;
@@ -120,33 +81,30 @@ class GoogleSheetsService {
   }
 
   async updateRecord(record: CompanyRecord): Promise<void> {
+    if (!this.isConfigured()) {
+      throw new Error('Google Apps Script URL não configurado');
+    }
+
     try {
-      // Primeiro, encontrar a linha do registro
-      const allRecords = await this.getAllRecords();
-      const rowIndex = allRecords.findIndex(r => r.id === record.id);
-      
-      if (rowIndex === -1) {
-        throw new Error('Registro não encontrado');
+      const response = await fetch(this.webAppUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'updateRecord',
+          record: record
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na requisição: ${response.statusText}`);
       }
 
-      // +2 porque: +1 para converter de índice 0 para 1, +1 para pular o cabeçalho
-      const actualRowIndex = rowIndex + 2;
-      
-      const values = [[
-        record.id,
-        record.companyName,
-        record.username,
-        record.password,
-        record.createdAt,
-        record.updatedAt || ''
-      ]];
-
-      await this.makeRequest('PUT', `/values/Sheet1!A${actualRowIndex}:F${actualRowIndex}`, {
-        range: `Sheet1!A${actualRowIndex}:F${actualRowIndex}`,
-        majorDimension: 'ROWS',
-        values: values,
-        valueInputOption: 'RAW'
-      });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao atualizar registro');
+      }
     } catch (error) {
       console.error('Erro ao atualizar registro:', error);
       throw error;
@@ -154,29 +112,63 @@ class GoogleSheetsService {
   }
 
   async deleteRecord(id: string): Promise<void> {
+    if (!this.isConfigured()) {
+      throw new Error('Google Apps Script URL não configurado');
+    }
+
     try {
-      // Primeiro, encontrar a linha do registro
-      const allRecords = await this.getAllRecords();
-      const rowIndex = allRecords.findIndex(r => r.id === id);
-      
-      if (rowIndex === -1) {
-        throw new Error('Registro não encontrado');
+      const response = await fetch(this.webAppUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'deleteRecord',
+          id: id
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na requisição: ${response.statusText}`);
       }
 
-      // +2 porque: +1 para converter de índice 0 para 1, +1 para pular o cabeçalho
-      const actualRowIndex = rowIndex + 2;
-
-      // Limpar a linha (não é possível deletar linhas via API básica)
-      const emptyValues = [['', '', '', '', '', '']];
-      
-      await this.makeRequest('PUT', `/values/Sheet1!A${actualRowIndex}:F${actualRowIndex}`, {
-        range: `Sheet1!A${actualRowIndex}:F${actualRowIndex}`,
-        majorDimension: 'ROWS',
-        values: emptyValues,
-        valueInputOption: 'RAW'
-      });
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao deletar registro');
+      }
     } catch (error) {
       console.error('Erro ao deletar registro:', error);
+      throw error;
+    }
+  }
+
+  // Método para inicializar a planilha (criar cabeçalhos)
+  async initializeSheet(): Promise<void> {
+    if (!this.isConfigured()) {
+      throw new Error('Google Apps Script URL não configurado');
+    }
+
+    try {
+      const response = await fetch(this.webAppUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'initialize'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na requisição: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao inicializar planilha');
+      }
+    } catch (error) {
+      console.error('Erro ao inicializar planilha:', error);
       throw error;
     }
   }

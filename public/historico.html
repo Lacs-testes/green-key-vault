@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -53,7 +52,7 @@
                     <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                     </svg>
-                    <span class="text-green-800 font-medium">Dados sincronizados com Google Sheets</span>
+                    <span class="text-green-800 font-medium">Dados sincronizados com Google Sheets via Apps Script</span>
                 </div>
             </div>
         </div>
@@ -141,54 +140,60 @@
             return new Date(dateString).toLocaleString('pt-BR');
         }
 
-        // Serviço do Google Sheets
+        // Serviço do Google Sheets via Apps Script
         class GoogleSheetsService {
             constructor() {
-                this.apiKey = localStorage.getItem('google_sheets_api_key') || '';
-                this.spreadsheetId = localStorage.getItem('google_sheets_id') || '';
+                this.webAppUrl = localStorage.getItem('google_apps_script_url') || '';
             }
 
             isConfigured() {
-                return !!(this.apiKey && this.spreadsheetId);
+                return !!this.webAppUrl;
             }
 
             async getAllRecords() {
                 if (!this.isConfigured()) {
-                    throw new Error('Google Sheets não configurado');
+                    throw new Error('Google Apps Script URL não configurado');
                 }
 
-                const baseUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
-                const range = 'Sheet1!A:F';
-                const url = `${baseUrl}/${this.spreadsheetId}/values/${range}?key=${this.apiKey}`;
+                const response = await fetch(`${this.webAppUrl}?action=getRecords`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
 
-                const response = await fetch(url);
-                
                 if (!response.ok) {
-                    throw new Error(`Google Sheets API error: ${response.statusText}`);
+                    throw new Error(`Erro na requisição: ${response.statusText}`);
                 }
 
                 const data = await response.json();
-                
-                if (!data.values || data.values.length <= 1) {
-                    return [];
-                }
-
-                const rows = data.values.slice(1);
-                
-                return rows.map(row => ({
-                    id: row[0] || '',
-                    companyName: row[1] || '',
-                    username: row[2] || '',
-                    password: row[3] || '',
-                    createdAt: row[4] || '',
-                    updatedAt: row[5] || undefined
-                })).filter(record => record.id);
+                return data.records || [];
             }
 
             async deleteRecord(id) {
-                // Implementação da exclusão seria similar ao serviço principal
-                // Por simplicidade, apenas mostrar erro para agora
-                throw new Error('Exclusão deve ser feita na página principal');
+                if (!this.isConfigured()) {
+                    throw new Error('Google Apps Script URL não configurado');
+                }
+
+                const response = await fetch(this.webAppUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'deleteRecord',
+                        id: id
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro na requisição: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.error || 'Erro ao deletar registro');
+                }
             }
         }
 
@@ -223,7 +228,7 @@
             } catch (error) {
                 console.error('Erro ao carregar do Google Sheets:', error);
                 history = getLocalHistory();
-                showToast('Carregando dados locais. Verifique a configuração do Google Sheets.', 'error');
+                showToast('Carregando dados locais. Verifique a configuração do Apps Script.', 'error');
             }
 
             loadingState.classList.add('hidden');
@@ -250,10 +255,10 @@
                             <div class="text-sm text-gray-600 space-y-1">
                                 <p><strong>Gerado em:</strong> ${formatDate(record.createdAt)}</p>
                                 ${record.updatedAt ? `<p><strong>Última alteração:</strong> ${formatDate(record.updatedAt)}</p>` : ''}
-                                ${isGoogleSheetsEnabled ? '<p class="text-green-600"><strong>Fonte:</strong> Google Sheets</p>' : '<p class="text-gray-500"><strong>Fonte:</strong> Armazenamento local</p>'}
+                                ${isGoogleSheetsEnabled ? '<p class="text-green-600"><strong>Fonte:</strong> Google Sheets (Apps Script)</p>' : '<p class="text-gray-500"><strong>Fonte:</strong> Armazenamento local</p>'}
                             </div>
                         </div>
-                        ${!isGoogleSheetsEnabled ? `
+                        ${isGoogleSheetsEnabled ? `
                         <button 
                             onclick="deleteRecord('${record.id}', '${record.companyName}')"
                             class="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition-colors"
@@ -263,7 +268,17 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                             </svg>
                         </button>
-                        ` : ''}
+                        ` : `
+                        <button 
+                            onclick="deleteLocalRecord('${record.id}', '${record.companyName}')"
+                            class="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition-colors"
+                            title="Excluir registro"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                        `}
                     </div>
 
                     <div class="grid md:grid-cols-2 gap-4">
@@ -333,7 +348,20 @@
             `).join('');
         }
 
-        function deleteRecord(id, companyName) {
+        async function deleteRecord(id, companyName) {
+            if (confirm(`Tem certeza que deseja excluir "${companyName}"?`)) {
+                try {
+                    await googleSheetsService.deleteRecord(id);
+                    showToast('Registro excluído do Google Sheets com sucesso!');
+                    loadHistory();
+                } catch (error) {
+                    console.error('Erro ao excluir:', error);
+                    showToast('Erro ao excluir registro do Google Sheets.', 'error');
+                }
+            }
+        }
+
+        function deleteLocalRecord(id, companyName) {
             if (confirm(`Tem certeza que deseja excluir "${companyName}"?`)) {
                 const history = getLocalHistory();
                 const updatedHistory = history.filter(record => record.id !== id);

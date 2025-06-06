@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,7 +51,7 @@ const Index = () => {
       console.error('Erro ao carregar histórico do Google Sheets:', error);
       toast({
         title: "Erro",
-        description: "Não foi possível carregar o histórico do Google Sheets.",
+        description: "Não foi possível carregar o histórico do Google Sheets. Usando dados locais.",
         variant: "destructive",
       });
       // Fallback para localStorage
@@ -105,6 +104,10 @@ const Index = () => {
       try {
         await googleSheetsService.addRecord(record);
         await loadHistoryFromGoogleSheets();
+        toast({
+          title: "Salvo",
+          description: "Dados salvos no Google Sheets com sucesso!",
+        });
       } catch (error) {
         console.error('Erro ao salvar no Google Sheets:', error);
         toast({
@@ -145,6 +148,10 @@ const Index = () => {
       try {
         await googleSheetsService.deleteRecord(id);
         await loadHistoryFromGoogleSheets();
+        toast({
+          title: "Excluído",
+          description: "Registro removido do Google Sheets.",
+        });
       } catch (error) {
         console.error('Erro ao excluir do Google Sheets:', error);
         toast({
@@ -159,16 +166,15 @@ const Index = () => {
       const updatedHistory = localHistory.filter(record => record.id !== id);
       localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
       setHistory(updatedHistory);
+      toast({
+        title: "Excluído",
+        description: "Registro removido do histórico local.",
+      });
     }
     
     if (currentRecord && currentRecord.id === id) {
       setCurrentRecord(null);
     }
-    
-    toast({
-      title: "Excluído",
-      description: "Registro removido do histórico.",
-    });
   };
 
   const updateHistory = async (updatedRecord: CompanyRecord) => {
@@ -181,6 +187,10 @@ const Index = () => {
       try {
         await googleSheetsService.updateRecord(recordWithUpdateTime);
         await loadHistoryFromGoogleSheets();
+        toast({
+          title: "Atualizado",
+          description: "Registro atualizado no Google Sheets.",
+        });
       } catch (error) {
         console.error('Erro ao atualizar no Google Sheets:', error);
         toast({
@@ -197,16 +207,15 @@ const Index = () => {
       );
       localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
       setHistory(updatedHistory);
+      toast({
+        title: "Atualizado",
+        description: "Registro atualizado no histórico local.",
+      });
     }
     
     if (currentRecord && currentRecord.id === updatedRecord.id) {
       setCurrentRecord(recordWithUpdateTime);
     }
-    
-    toast({
-      title: "Atualizado",
-      description: "Registro atualizado no histórico.",
-    });
   };
 
   const handleCompanySubmit = async (companyName: string) => {
