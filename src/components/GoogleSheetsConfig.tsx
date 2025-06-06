@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Settings, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { googleSheetsService } from '@/services/googleSheetsService';
+import { googleSheetsService, GoogleSheetsService } from '@/services/googleSheetsService'; // ✅ importa a classe e instância
+
+const service: GoogleSheetsService = googleSheetsService; // ✅ define instância tipada
 
 interface GoogleSheetsConfigProps {
   onConfigChange: (configured: boolean) => void;
@@ -19,10 +20,10 @@ const GoogleSheetsConfig: React.FC<GoogleSheetsConfigProps> = ({ onConfigChange 
   const { toast } = useToast();
 
   useEffect(() => {
-    const configured = googleSheetsService.isConfigured();
+    const configured = service.isConfigured();
     setIsConfigured(configured);
     onConfigChange(configured);
-    
+
     if (configured) {
       setWebAppUrl(localStorage.getItem('google_apps_script_url') || '');
     }
@@ -39,16 +40,14 @@ const GoogleSheetsConfig: React.FC<GoogleSheetsConfigProps> = ({ onConfigChange 
     }
 
     setIsValidating(true);
-    
+
     try {
-      googleSheetsService.setWebAppUrl(webAppUrl.trim());
-      
-      // Tentar fazer uma requisição de teste
-      await googleSheetsService.getAllRecords();
-      
+      service.setWebAppUrl(webAppUrl.trim());
+      await service.getAllRecords();
+
       setIsConfigured(true);
       onConfigChange(true);
-      
+
       toast({
         title: "Sucesso",
         description: "Conexão com Google Sheets configurada com sucesso!",
@@ -70,7 +69,7 @@ const GoogleSheetsConfig: React.FC<GoogleSheetsConfigProps> = ({ onConfigChange 
     setWebAppUrl('');
     setIsConfigured(false);
     onConfigChange(false);
-    
+
     toast({
       title: "Desconectado",
       description: "Google Sheets desconectado. Os dados serão salvos localmente.",
@@ -132,7 +131,7 @@ const GoogleSheetsConfig: React.FC<GoogleSheetsConfigProps> = ({ onConfigChange 
                 Configure para sincronizar automaticamente os dados.
               </div>
             </div>
-            
+
             <div>
               <Label htmlFor="webAppUrl" className="text-[#0E4A36] font-medium">
                 URL do Google Apps Script Web App
@@ -166,7 +165,7 @@ const GoogleSheetsConfig: React.FC<GoogleSheetsConfigProps> = ({ onConfigChange 
                 <ExternalLink className="w-4 h-4" />
               </Button>
             </div>
-            
+
             <div className="text-xs text-[#333333] bg-[#AAD1C2]/10 p-3 rounded">
               <strong>Como configurar:</strong>
               <ol className="list-decimal list-inside mt-2 space-y-1">
