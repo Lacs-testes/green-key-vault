@@ -46,6 +46,18 @@
             </div>
         </div>
 
+        <!-- Status da Integração -->
+        <div id="integrationStatus" class="mb-6 hidden">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span class="text-green-800 font-medium">Dados sincronizados com Google Sheets</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Histórico Container -->
         <div class="bg-white rounded-lg border border-laes-light shadow-lg">
             <div class="bg-laes-green text-white p-6">
@@ -57,9 +69,21 @@
                 </h2>
             </div>
             <div class="p-6">
-                <div id="historyContainer" class="space-y-4">
+                <div id="loadingState" class="text-center py-12">
+                    <div class="bg-laes-light/20 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-10 h-10 text-laes-green animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold text-laes-dark mb-2">
+                        Carregando histórico...
+                    </h3>
+                </div>
+                
+                <div id="historyContainer" class="space-y-4 hidden">
                     <!-- Histórico será carregado aqui -->
                 </div>
+                
                 <div id="emptyState" class="text-center py-12 hidden">
                     <div class="bg-laes-light/20 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
                         <svg class="w-10 h-10 text-laes-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,12 +116,10 @@
             
             toastContainer.appendChild(toast);
             
-            // Animar entrada
             setTimeout(() => {
                 toast.classList.remove('translate-x-full');
             }, 100);
             
-            // Remover após 3 segundos
             setTimeout(() => {
                 toast.classList.add('translate-x-full');
                 setTimeout(() => {
@@ -106,7 +128,6 @@
             }, 3000);
         }
 
-        // Função para copiar texto
         async function copyToClipboard(text, fieldName) {
             try {
                 await navigator.clipboard.writeText(text);
@@ -116,43 +137,104 @@
             }
         }
 
-        // Função para formatar data
         function formatDate(dateString) {
             return new Date(dateString).toLocaleString('pt-BR');
         }
 
-        // Função para excluir registro
-        function deleteRecord(id, companyName) {
-            if (confirm(`Tem certeza que deseja excluir "${companyName}"?`)) {
-                const history = getHistory();
-                const updatedHistory = history.filter(record => record.id !== id);
-                localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
-                showToast('Registro excluído com sucesso!');
-                loadHistory();
+        // Serviço do Google Sheets
+        class GoogleSheetsService {
+            constructor() {
+                this.apiKey = localStorage.getItem('google_sheets_api_key') || '';
+                this.spreadsheetId = localStorage.getItem('google_sheets_id') || '';
+            }
+
+            isConfigured() {
+                return !!(this.apiKey && this.spreadsheetId);
+            }
+
+            async getAllRecords() {
+                if (!this.isConfigured()) {
+                    throw new Error('Google Sheets não configurado');
+                }
+
+                const baseUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
+                const range = 'Sheet1!A:F';
+                const url = `${baseUrl}/${this.spreadsheetId}/values/${range}?key=${this.apiKey}`;
+
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`Google Sheets API error: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                
+                if (!data.values || data.values.length <= 1) {
+                    return [];
+                }
+
+                const rows = data.values.slice(1);
+                
+                return rows.map(row => ({
+                    id: row[0] || '',
+                    companyName: row[1] || '',
+                    username: row[2] || '',
+                    password: row[3] || '',
+                    createdAt: row[4] || '',
+                    updatedAt: row[5] || undefined
+                })).filter(record => record.id);
+            }
+
+            async deleteRecord(id) {
+                // Implementação da exclusão seria similar ao serviço principal
+                // Por simplicidade, apenas mostrar erro para agora
+                throw new Error('Exclusão deve ser feita na página principal');
             }
         }
 
-        // Função para obter histórico
-        function getHistory() {
+        const googleSheetsService = new GoogleSheetsService();
+
+        function getLocalHistory() {
             const stored = localStorage.getItem('companyHistory');
             return stored ? JSON.parse(stored) : [];
         }
 
-        // Função para carregar histórico
-        function loadHistory() {
-            const history = getHistory();
+        async function loadHistory() {
+            const loadingState = document.getElementById('loadingState');
             const container = document.getElementById('historyContainer');
             const emptyState = document.getElementById('emptyState');
+            const integrationStatus = document.getElementById('integrationStatus');
+
+            loadingState.classList.remove('hidden');
+            container.classList.add('hidden');
+            emptyState.classList.add('hidden');
+
+            let history = [];
+            let isGoogleSheetsEnabled = false;
+
+            try {
+                if (googleSheetsService.isConfigured()) {
+                    history = await googleSheetsService.getAllRecords();
+                    isGoogleSheetsEnabled = true;
+                    integrationStatus.classList.remove('hidden');
+                } else {
+                    history = getLocalHistory();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar do Google Sheets:', error);
+                history = getLocalHistory();
+                showToast('Carregando dados locais. Verifique a configuração do Google Sheets.', 'error');
+            }
+
+            loadingState.classList.add('hidden');
 
             if (history.length === 0) {
-                container.innerHTML = '';
                 emptyState.classList.remove('hidden');
                 return;
             }
 
-            emptyState.classList.add('hidden');
+            container.classList.remove('hidden');
             
-            // Ordenar por data (mais recente primeiro)
             history.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
             container.innerHTML = history.map(record => `
@@ -168,8 +250,10 @@
                             <div class="text-sm text-gray-600 space-y-1">
                                 <p><strong>Gerado em:</strong> ${formatDate(record.createdAt)}</p>
                                 ${record.updatedAt ? `<p><strong>Última alteração:</strong> ${formatDate(record.updatedAt)}</p>` : ''}
+                                ${isGoogleSheetsEnabled ? '<p class="text-green-600"><strong>Fonte:</strong> Google Sheets</p>' : '<p class="text-gray-500"><strong>Fonte:</strong> Armazenamento local</p>'}
                             </div>
                         </div>
+                        ${!isGoogleSheetsEnabled ? `
                         <button 
                             onclick="deleteRecord('${record.id}', '${record.companyName}')"
                             class="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition-colors"
@@ -179,10 +263,10 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                             </svg>
                         </button>
+                        ` : ''}
                     </div>
 
                     <div class="grid md:grid-cols-2 gap-4">
-                        <!-- Usuário -->
                         <div>
                             <label class="text-laes-dark font-medium flex items-center gap-2 mb-2">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,7 +292,6 @@
                             </div>
                         </div>
 
-                        <!-- Senha -->
                         <div>
                             <label class="text-laes-dark font-medium flex items-center gap-2 mb-2">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -235,7 +318,6 @@
                         </div>
                     </div>
 
-                    <!-- Copiar Ambos -->
                     <div class="mt-4">
                         <button
                             onclick="copyToClipboard('Usuário: ${record.username}\\nSenha: ${record.password}', 'Credenciais')"
@@ -251,11 +333,18 @@
             `).join('');
         }
 
-        // Carregar histórico quando a página carregar
-        document.addEventListener('DOMContentLoaded', loadHistory);
+        function deleteRecord(id, companyName) {
+            if (confirm(`Tem certeza que deseja excluir "${companyName}"?`)) {
+                const history = getLocalHistory();
+                const updatedHistory = history.filter(record => record.id !== id);
+                localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
+                showToast('Registro excluído com sucesso!');
+                loadHistory();
+            }
+        }
 
-        // Atualizar histórico a cada 5 segundos (caso seja alterado em outra aba)
-        setInterval(loadHistory, 5000);
+        document.addEventListener('DOMContentLoaded', loadHistory);
+        setInterval(loadHistory, 30000); // Atualizar a cada 30 segundos
     </script>
 </body>
 </html>

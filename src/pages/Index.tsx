@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,8 @@ import { useToast } from '@/hooks/use-toast';
 import CompanyForm from '@/components/CompanyForm';
 import CredentialsDisplay from '@/components/CredentialsDisplay';
 import HistorySearch from '@/components/HistorySearch';
+import GoogleSheetsConfig from '@/components/GoogleSheetsConfig';
+import { googleSheetsService } from '@/services/googleSheetsService';
 
 interface CompanyRecord {
   id: string;
@@ -15,39 +18,71 @@ interface CompanyRecord {
   username: string;
   password: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 const Index = () => {
   const [currentRecord, setCurrentRecord] = useState<CompanyRecord | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [isGoogleSheetsConfigured, setIsGoogleSheetsConfigured] = useState(false);
+  const [history, setHistory] = useState<CompanyRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setIsGoogleSheetsConfigured(googleSheetsService.isConfigured());
+    if (googleSheetsService.isConfigured()) {
+      loadHistoryFromGoogleSheets();
+    } else {
+      // Carregar do localStorage se Google Sheets não estiver configurado
+      setHistory(getLocalHistory());
+    }
+  }, []);
+
+  const loadHistoryFromGoogleSheets = async () => {
+    setIsLoading(true);
+    try {
+      const records = await googleSheetsService.getAllRecords();
+      // Ordenar por data (mais recente primeiro)
+      const sortedRecords = records.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setHistory(sortedRecords);
+    } catch (error) {
+      console.error('Erro ao carregar histórico do Google Sheets:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar o histórico do Google Sheets.",
+        variant: "destructive",
+      });
+      // Fallback para localStorage
+      setHistory(getLocalHistory());
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const generateCredentials = (companyName: string): { username: string; password: string } => {
     // Limpar o nome da empresa
     const cleanName = companyName.trim();
     
-    // Gerar username - usar nome completo sem abreviações
     let username = cleanName
-      .replace(/[^\w\s]/g, '') // Remove pontuação
-      .replace(/\s+/g, '.') // Substitui espaços por pontos
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, '.')
       .toUpperCase();
     
-    // Limitar a 15 caracteres cortando se necessário
     if (username.length > 15) {
       username = username.substring(0, 15);
-      // Remove ponto no final se houver
       if (username.endsWith('.')) {
         username = username.substring(0, 14);
       }
     }
     
-    // Gerar senha
     const words = cleanName.split(/\s+/);
     const firstWord = words[0];
     let passwordBase = firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
     
-    // Limitar para caber @123 (máximo 12 caracteres total)
-    const maxPasswordBaseLength = 12 - 4; // 4 = "@123".length
+    const maxPasswordBaseLength = 12 - 4;
     if (passwordBase.length > maxPasswordBaseLength) {
       passwordBase = passwordBase.substring(0, maxPasswordBaseLength);
     }
@@ -57,7 +92,7 @@ const Index = () => {
     return { username, password };
   };
 
-  const saveToHistory = (companyName: string, username: string, password: string): CompanyRecord => {
+  const saveRecord = async (companyName: string, username: string, password: string): Promise<CompanyRecord> => {
     const record: CompanyRecord = {
       id: Date.now().toString(),
       companyName,
@@ -66,31 +101,66 @@ const Index = () => {
       createdAt: new Date().toISOString()
     };
     
-    const history = getHistory();
-    const updatedHistory = [record, ...history];
-    localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
+    if (isGoogleSheetsConfigured) {
+      try {
+        await googleSheetsService.addRecord(record);
+        await loadHistoryFromGoogleSheets();
+      } catch (error) {
+        console.error('Erro ao salvar no Google Sheets:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao salvar no Google Sheets. Dados salvos localmente.",
+          variant: "destructive",
+        });
+        // Fallback para localStorage
+        saveToLocalStorage(record);
+      }
+    } else {
+      saveToLocalStorage(record);
+    }
     
     return record;
   };
 
-  const getHistory = (): CompanyRecord[] => {
+  const saveToLocalStorage = (record: CompanyRecord) => {
+    const localHistory = getLocalHistory();
+    const updatedHistory = [record, ...localHistory];
+    localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
+    setHistory(updatedHistory);
+  };
+
+  const getLocalHistory = (): CompanyRecord[] => {
     const stored = localStorage.getItem('companyHistory');
     return stored ? JSON.parse(stored) : [];
   };
 
   const searchInHistory = (companyName: string): CompanyRecord | null => {
-    const history = getHistory();
     return history.find(record => 
       record.companyName.toLowerCase() === companyName.toLowerCase()
     ) || null;
   };
 
-  const deleteFromHistory = (id: string) => {
-    const history = getHistory();
-    const updatedHistory = history.filter(record => record.id !== id);
-    localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
+  const deleteFromHistory = async (id: string) => {
+    if (isGoogleSheetsConfigured) {
+      try {
+        await googleSheetsService.deleteRecord(id);
+        await loadHistoryFromGoogleSheets();
+      } catch (error) {
+        console.error('Erro ao excluir do Google Sheets:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao excluir do Google Sheets.",
+          variant: "destructive",
+        });
+        return;
+      }
+    } else {
+      const localHistory = getLocalHistory();
+      const updatedHistory = localHistory.filter(record => record.id !== id);
+      localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
+      setHistory(updatedHistory);
+    }
     
-    // Se o registro atual foi deletado, limpar a tela
     if (currentRecord && currentRecord.id === id) {
       setCurrentRecord(null);
     }
@@ -101,16 +171,36 @@ const Index = () => {
     });
   };
 
-  const updateHistory = (updatedRecord: CompanyRecord) => {
-    const history = getHistory();
-    const updatedHistory = history.map(record => 
-      record.id === updatedRecord.id ? updatedRecord : record
-    );
-    localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
+  const updateHistory = async (updatedRecord: CompanyRecord) => {
+    const recordWithUpdateTime = {
+      ...updatedRecord,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (isGoogleSheetsConfigured) {
+      try {
+        await googleSheetsService.updateRecord(recordWithUpdateTime);
+        await loadHistoryFromGoogleSheets();
+      } catch (error) {
+        console.error('Erro ao atualizar no Google Sheets:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao atualizar no Google Sheets.",
+          variant: "destructive",
+        });
+        return;
+      }
+    } else {
+      const localHistory = getLocalHistory();
+      const updatedHistory = localHistory.map(record => 
+        record.id === updatedRecord.id ? recordWithUpdateTime : record
+      );
+      localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
+      setHistory(updatedHistory);
+    }
     
-    // Se o registro atual foi editado, atualizar a tela
     if (currentRecord && currentRecord.id === updatedRecord.id) {
-      setCurrentRecord(updatedRecord);
+      setCurrentRecord(recordWithUpdateTime);
     }
     
     toast({
@@ -119,8 +209,7 @@ const Index = () => {
     });
   };
 
-  const handleCompanySubmit = (companyName: string) => {
-    // Verificar se já existe no histórico
+  const handleCompanySubmit = async (companyName: string) => {
     const existingRecord = searchInHistory(companyName);
     
     if (existingRecord) {
@@ -130,13 +219,12 @@ const Index = () => {
         description: "Credenciais recuperadas do histórico.",
       });
     } else {
-      // Gerar novas credenciais
       const { username, password } = generateCredentials(companyName);
-      const newRecord = saveToHistory(companyName, username, password);
+      const newRecord = await saveRecord(companyName, username, password);
       setCurrentRecord(newRecord);
       toast({
         title: "Credenciais geradas",
-        description: "Novas credenciais foram criadas e salvas no histórico.",
+        description: "Novas credenciais foram criadas e salvas.",
       });
     }
     setShowHistory(false);
@@ -149,6 +237,15 @@ const Index = () => {
 
   const openHistoryPage = () => {
     window.open('/historico.html', '_blank');
+  };
+
+  const handleGoogleSheetsConfigChange = (configured: boolean) => {
+    setIsGoogleSheetsConfigured(configured);
+    if (configured) {
+      loadHistoryFromGoogleSheets();
+    } else {
+      setHistory(getLocalHistory());
+    }
   };
 
   return (
@@ -178,6 +275,8 @@ const Index = () => {
           <div className="space-y-6">
             <CompanyForm onSubmit={handleCompanySubmit} />
             
+            <GoogleSheetsConfig onConfigChange={handleGoogleSheetsConfigChange} />
+            
             <Card className="border-[#AAD1C2] shadow-lg">
               <CardHeader className="bg-[#117A57] text-white">
                 <CardTitle className="flex items-center gap-2">
@@ -190,9 +289,10 @@ const Index = () => {
                   onClick={() => setShowHistory(!showHistory)}
                   variant="outline"
                   className="w-full border-[#117A57] text-[#117A57] hover:bg-[#AAD1C2]/20"
+                  disabled={isLoading}
                 >
                   <Search className="w-4 h-4 mr-2" />
-                  Buscar no Histórico
+                  {isLoading ? 'Carregando...' : 'Buscar no Histórico'}
                 </Button>
                 
                 <Button
@@ -206,7 +306,7 @@ const Index = () => {
                 {showHistory && (
                   <div className="mt-4">
                     <HistorySearch
-                      history={getHistory()}
+                      history={history}
                       onSelect={handleHistorySelect}
                       onDelete={deleteFromHistory}
                       onUpdate={updateHistory}
