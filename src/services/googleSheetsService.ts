@@ -26,7 +26,7 @@ class GoogleSheetsService {
       throw new Error('URL do Google Apps Script não configurada.');
     }
 
-    const response = await fetch(`${this.webAppUrl}?action=obterRegistros`);
+    const response = await fetch(`${this.webAppUrl}?action=getRecords`);
     
     if (!response.ok) {
       throw new Error('Erro ao buscar os registros no Google Sheets.');
