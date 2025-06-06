@@ -57,7 +57,7 @@ const GoogleSheetsConfig: React.FC<GoogleSheetsConfigProps> = ({ onConfigChange 
       console.error('Erro ao validar configuração:', error);
       toast({
         title: "Erro de conexão",
-        description: "Não foi possível conectar com o Google Apps Script. Verifique a URL e tente novamente.",
+        description: error instanceof Error ? error.message : "Não foi possível conectar com o Google Apps Script. Verifique a URL e tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -81,6 +81,17 @@ const GoogleSheetsConfig: React.FC<GoogleSheetsConfigProps> = ({ onConfigChange 
     window.open('https://script.google.com', '_blank');
   };
 
+  const maskUrl = (url: string) => {
+    if (!url) return '';
+    const urlParts = url.split('/');
+    if (urlParts.length < 6) return url;
+    const scriptId = urlParts[5];
+    if (scriptId.length > 8) {
+      return `...${scriptId.slice(-8)}/exec`;
+    }
+    return url;
+  };
+
   return (
     <Card className="border-[#AAD1C2] shadow-lg">
       <CardHeader className="bg-[#117A57] text-white">
@@ -99,8 +110,8 @@ const GoogleSheetsConfig: React.FC<GoogleSheetsConfigProps> = ({ onConfigChange 
             </div>
             <div className="text-sm text-[#333333]">
               <strong>URL configurada:</strong>
-              <div className="font-mono text-xs bg-[#AAD1C2]/20 p-2 rounded mt-1 break-all">
-                {webAppUrl}
+              <div className="font-mono text-xs bg-[#AAD1C2]/20 p-2 rounded mt-1">
+                {maskUrl(webAppUrl)}
               </div>
             </div>
             <Button
@@ -162,7 +173,7 @@ const GoogleSheetsConfig: React.FC<GoogleSheetsConfigProps> = ({ onConfigChange 
                 <li>Crie uma nova planilha no Google Sheets</li>
                 <li>Abra o Google Apps Script (script.google.com)</li>
                 <li>Cole o código do Apps Script fornecido</li>
-                <li>Publique como Web App</li>
+                <li>Publique como Web App com acesso "Qualquer pessoa"</li>
                 <li>Cole a URL aqui</li>
               </ol>
             </div>

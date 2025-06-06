@@ -35,16 +35,23 @@ class GoogleSheetsService {
         headers: {
           'Content-Type': 'application/json',
         },
+        mode: 'cors',
+        credentials: 'omit'
       });
 
       if (!response.ok) {
-        throw new Error(`Erro na requisição: ${response.statusText}`);
+        console.error('Response status:', response.status, response.statusText);
+        throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('Dados recebidos do Google Sheets:', data);
       return data.records || [];
     } catch (error) {
-      console.error('Erro ao buscar registros:', error);
+      console.error('Erro detalhado ao buscar registros:', error);
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error('Erro de CORS ou URL incorreta. Verifique se o Apps Script está publicado corretamente.');
+      }
       throw error;
     }
   }
@@ -60,6 +67,8 @@ class GoogleSheetsService {
         headers: {
           'Content-Type': 'application/json',
         },
+        mode: 'cors',
+        credentials: 'omit',
         body: JSON.stringify({
           action: 'addRecord',
           record: record
@@ -67,15 +76,20 @@ class GoogleSheetsService {
       });
 
       if (!response.ok) {
-        throw new Error(`Erro na requisição: ${response.statusText}`);
+        console.error('Response status:', response.status, response.statusText);
+        throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result = await response.json();
+      console.log('Resultado do envio:', result);
       if (!result.success) {
         throw new Error(result.error || 'Erro ao adicionar registro');
       }
     } catch (error) {
-      console.error('Erro ao adicionar registro:', error);
+      console.error('Erro detalhado ao adicionar registro:', error);
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error('Erro de CORS ou URL incorreta. Verifique se o Apps Script está publicado corretamente.');
+      }
       throw error;
     }
   }
@@ -91,6 +105,8 @@ class GoogleSheetsService {
         headers: {
           'Content-Type': 'application/json',
         },
+        mode: 'cors',
+        credentials: 'omit',
         body: JSON.stringify({
           action: 'updateRecord',
           record: record
@@ -98,7 +114,8 @@ class GoogleSheetsService {
       });
 
       if (!response.ok) {
-        throw new Error(`Erro na requisição: ${response.statusText}`);
+        console.error('Response status:', response.status, response.statusText);
+        throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result = await response.json();
@@ -106,7 +123,10 @@ class GoogleSheetsService {
         throw new Error(result.error || 'Erro ao atualizar registro');
       }
     } catch (error) {
-      console.error('Erro ao atualizar registro:', error);
+      console.error('Erro detalhado ao atualizar registro:', error);
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error('Erro de CORS ou URL incorreta. Verifique se o Apps Script está publicado corretamente.');
+      }
       throw error;
     }
   }
@@ -122,6 +142,8 @@ class GoogleSheetsService {
         headers: {
           'Content-Type': 'application/json',
         },
+        mode: 'cors',
+        credentials: 'omit',
         body: JSON.stringify({
           action: 'deleteRecord',
           id: id
@@ -129,7 +151,8 @@ class GoogleSheetsService {
       });
 
       if (!response.ok) {
-        throw new Error(`Erro na requisição: ${response.statusText}`);
+        console.error('Response status:', response.status, response.statusText);
+        throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result = await response.json();
@@ -137,7 +160,10 @@ class GoogleSheetsService {
         throw new Error(result.error || 'Erro ao deletar registro');
       }
     } catch (error) {
-      console.error('Erro ao deletar registro:', error);
+      console.error('Erro detalhado ao deletar registro:', error);
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error('Erro de CORS ou URL incorreta. Verifique se o Apps Script está publicado corretamente.');
+      }
       throw error;
     }
   }
@@ -154,13 +180,16 @@ class GoogleSheetsService {
         headers: {
           'Content-Type': 'application/json',
         },
+        mode: 'cors',
+        credentials: 'omit',
         body: JSON.stringify({
           action: 'initialize'
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`Erro na requisição: ${response.statusText}`);
+        console.error('Response status:', response.status, response.statusText);
+        throw new Error(`Erro HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result = await response.json();
@@ -168,7 +197,10 @@ class GoogleSheetsService {
         throw new Error(result.error || 'Erro ao inicializar planilha');
       }
     } catch (error) {
-      console.error('Erro ao inicializar planilha:', error);
+      console.error('Erro detalhado ao inicializar planilha:', error);
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        throw new Error('Erro de CORS ou URL incorreta. Verifique se o Apps Script está publicado corretamente.');
+      }
       throw error;
     }
   }
