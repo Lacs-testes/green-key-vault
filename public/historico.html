@@ -46,7 +46,7 @@
         </div>
 
         <!-- Status da Integração -->
-        <div id="integrationStatus" class="mb-6 hidden">
+        <div class="mb-6">
             <div class="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div class="flex items-center gap-2">
                     <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,18 +143,10 @@
         // Serviço do Google Sheets via Apps Script
         class GoogleSheetsService {
             constructor() {
-                this.webAppUrl = localStorage.getItem('google_apps_script_url') || '';
-            }
-
-            isConfigured() {
-                return !!this.webAppUrl;
+                this.webAppUrl = 'https://script.google.com/macros/s/AKfycbzsmNInj8mcx-Ih5bk8Hgz-bINozph-eRQpt3dPnkREbzONUhiwvmiie4ZvDokV9PU2GQ/exec';
             }
 
             async getAllRecords() {
-                if (!this.isConfigured()) {
-                    throw new Error('Google Apps Script URL não configurado');
-                }
-
                 const response = await fetch(`${this.webAppUrl}?action=getRecords`, {
                     method: 'GET',
                     headers: {
@@ -171,10 +163,6 @@
             }
 
             async deleteRecord(id) {
-                if (!this.isConfigured()) {
-                    throw new Error('Google Apps Script URL não configurado');
-                }
-
                 const response = await fetch(this.webAppUrl, {
                     method: 'POST',
                     headers: {
@@ -208,27 +196,19 @@
             const loadingState = document.getElementById('loadingState');
             const container = document.getElementById('historyContainer');
             const emptyState = document.getElementById('emptyState');
-            const integrationStatus = document.getElementById('integrationStatus');
 
             loadingState.classList.remove('hidden');
             container.classList.add('hidden');
             emptyState.classList.add('hidden');
 
             let history = [];
-            let isGoogleSheetsEnabled = false;
 
             try {
-                if (googleSheetsService.isConfigured()) {
-                    history = await googleSheetsService.getAllRecords();
-                    isGoogleSheetsEnabled = true;
-                    integrationStatus.classList.remove('hidden');
-                } else {
-                    history = getLocalHistory();
-                }
+                history = await googleSheetsService.getAllRecords();
             } catch (error) {
                 console.error('Erro ao carregar do Google Sheets:', error);
                 history = getLocalHistory();
-                showToast('Carregando dados locais. Verifique a configuração do Apps Script.', 'error');
+                showToast('Carregando dados locais. Verifique a conexão com Google Sheets.', 'error');
             }
 
             loadingState.classList.add('hidden');
@@ -352,11 +332,11 @@
             if (confirm(`Tem certeza que deseja excluir "${companyName}"?`)) {
                 try {
                     await googleSheetsService.deleteRecord(id);
-                    showToast('Registro excluído do Google Sheets com sucesso!');
+                    showToast('Registro excluído com sucesso!');
                     loadHistory();
                 } catch (error) {
                     console.error('Erro ao excluir:', error);
-                    showToast('Erro ao excluir registro do Google Sheets.', 'error');
+                    showToast('Erro ao excluir registro.', 'error');
                 }
             }
         }

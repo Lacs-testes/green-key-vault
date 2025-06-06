@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Search, Copy, History, Key } from 'lucide-react';
+import { Search, History, Key } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import CompanyForm from '@/components/CompanyForm';
 import CredentialsDisplay from '@/components/CredentialsDisplay';
 import HistorySearch from '@/components/HistorySearch';
-import GoogleSheetsConfig from '@/components/GoogleSheetsConfig';
 import { googleSheetsService } from '@/services/googleSheetsService';
 
 interface CompanyRecord {
@@ -23,26 +20,18 @@ interface CompanyRecord {
 const Index = () => {
   const [currentRecord, setCurrentRecord] = useState<CompanyRecord | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [isGoogleSheetsConfigured, setIsGoogleSheetsConfigured] = useState(false);
   const [history, setHistory] = useState<CompanyRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    setIsGoogleSheetsConfigured(googleSheetsService.isConfigured());
-    if (googleSheetsService.isConfigured()) {
-      loadHistoryFromGoogleSheets();
-    } else {
-      // Carregar do localStorage se Google Sheets não estiver configurado
-      setHistory(getLocalHistory());
-    }
+    loadHistoryFromGoogleSheets();
   }, []);
 
   const loadHistoryFromGoogleSheets = async () => {
     setIsLoading(true);
     try {
       const records = await googleSheetsService.getAllRecords();
-      // Ordenar por data (mais recente primeiro)
       const sortedRecords = records.sort((a, b) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
@@ -54,7 +43,6 @@ const Index = () => {
         description: "Não foi possível carregar o histórico do Google Sheets. Usando dados locais.",
         variant: "destructive",
       });
-      // Fallback para localStorage
       setHistory(getLocalHistory());
     } finally {
       setIsLoading(false);
@@ -100,7 +88,7 @@ const Index = () => {
       createdAt: new Date().toISOString()
     };
     
-    if (isGoogleSheetsConfigured) {
+    if (googleSheetsService.isConfigured()) {
       try {
         await googleSheetsService.addRecord(record);
         await loadHistoryFromGoogleSheets();
@@ -144,32 +132,21 @@ const Index = () => {
   };
 
   const deleteFromHistory = async (id: string) => {
-    if (isGoogleSheetsConfigured) {
-      try {
-        await googleSheetsService.deleteRecord(id);
-        await loadHistoryFromGoogleSheets();
-        toast({
-          title: "Excluído",
-          description: "Registro removido do Google Sheets.",
-        });
-      } catch (error) {
-        console.error('Erro ao excluir do Google Sheets:', error);
-        toast({
-          title: "Erro",
-          description: "Erro ao excluir do Google Sheets.",
-          variant: "destructive",
-        });
-        return;
-      }
-    } else {
-      const localHistory = getLocalHistory();
-      const updatedHistory = localHistory.filter(record => record.id !== id);
-      localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
-      setHistory(updatedHistory);
+    try {
+      await googleSheetsService.deleteRecord(id);
+      await loadHistoryFromGoogleSheets();
       toast({
         title: "Excluído",
-        description: "Registro removido do histórico local.",
+        description: "Registro removido com sucesso.",
       });
+    } catch (error) {
+      console.error('Erro ao excluir:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao excluir registro.",
+        variant: "destructive",
+      });
+      return;
     }
     
     if (currentRecord && currentRecord.id === id) {
@@ -183,34 +160,21 @@ const Index = () => {
       updatedAt: new Date().toISOString()
     };
 
-    if (isGoogleSheetsConfigured) {
-      try {
-        await googleSheetsService.updateRecord(recordWithUpdateTime);
-        await loadHistoryFromGoogleSheets();
-        toast({
-          title: "Atualizado",
-          description: "Registro atualizado no Google Sheets.",
-        });
-      } catch (error) {
-        console.error('Erro ao atualizar no Google Sheets:', error);
-        toast({
-          title: "Erro",
-          description: "Erro ao atualizar no Google Sheets.",
-          variant: "destructive",
-        });
-        return;
-      }
-    } else {
-      const localHistory = getLocalHistory();
-      const updatedHistory = localHistory.map(record => 
-        record.id === updatedRecord.id ? recordWithUpdateTime : record
-      );
-      localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
-      setHistory(updatedHistory);
+    try {
+      await googleSheetsService.updateRecord(recordWithUpdateTime);
+      await loadHistoryFromGoogleSheets();
       toast({
         title: "Atualizado",
-        description: "Registro atualizado no histórico local.",
+        description: "Registro atualizado com sucesso.",
       });
+    } catch (error) {
+      console.error('Erro ao atualizar:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar registro.",
+        variant: "destructive",
+      });
+      return;
     }
     
     if (currentRecord && currentRecord.id === updatedRecord.id) {
@@ -248,15 +212,6 @@ const Index = () => {
     window.open('/historico.html', '_blank');
   };
 
-  const handleGoogleSheetsConfigChange = (configured: boolean) => {
-    setIsGoogleSheetsConfigured(configured);
-    if (configured) {
-      loadHistoryFromGoogleSheets();
-    } else {
-      setHistory(getLocalHistory());
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-[#AAD1C2]/20">
       <div className="container mx-auto px-4 py-8">
@@ -283,8 +238,6 @@ const Index = () => {
           {/* Formulário Principal */}
           <div className="space-y-6">
             <CompanyForm onSubmit={handleCompanySubmit} />
-            
-            <GoogleSheetsConfig onConfigChange={handleGoogleSheetsConfigChange} />
             
             <Card className="border-[#AAD1C2] shadow-lg">
               <CardHeader className="bg-[#117A57] text-white">

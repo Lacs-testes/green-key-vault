@@ -9,26 +9,13 @@ interface CompanyRecord {
 }
 
 class GoogleSheetsService {
-  private webAppUrl: string;
-
-  constructor() {
-    this.webAppUrl = localStorage.getItem('google_apps_script_url') || '';
-  }
-
-  setWebAppUrl(url: string) {
-    this.webAppUrl = url;
-    localStorage.setItem('google_apps_script_url', url);
-  }
+  private webAppUrl: string = 'https://script.google.com/macros/s/AKfycbzsmNInj8mcx-Ih5bk8Hgz-bINozph-eRQpt3dPnkREbzONUhiwvmiie4ZvDokV9PU2GQ/exec';
 
   isConfigured(): boolean {
-    return !!this.webAppUrl;
+    return true; // Sempre configurado agora
   }
 
   async getAllRecords(): Promise<CompanyRecord[]> {
-    if (!this.isConfigured()) {
-      throw new Error('Google Apps Script URL não configurado');
-    }
-
     try {
       const response = await fetch(`${this.webAppUrl}?action=getRecords`, {
         method: 'GET',
@@ -57,10 +44,6 @@ class GoogleSheetsService {
   }
 
   async addRecord(record: CompanyRecord): Promise<void> {
-    if (!this.isConfigured()) {
-      throw new Error('Google Apps Script URL não configurado');
-    }
-
     try {
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
@@ -95,10 +78,6 @@ class GoogleSheetsService {
   }
 
   async updateRecord(record: CompanyRecord): Promise<void> {
-    if (!this.isConfigured()) {
-      throw new Error('Google Apps Script URL não configurado');
-    }
-
     try {
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
@@ -132,10 +111,6 @@ class GoogleSheetsService {
   }
 
   async deleteRecord(id: string): Promise<void> {
-    if (!this.isConfigured()) {
-      throw new Error('Google Apps Script URL não configurado');
-    }
-
     try {
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
@@ -168,12 +143,7 @@ class GoogleSheetsService {
     }
   }
 
-  // Método para inicializar a planilha (criar cabeçalhos)
   async initializeSheet(): Promise<void> {
-    if (!this.isConfigured()) {
-      throw new Error('Google Apps Script URL não configurado');
-    }
-
     try {
       const response = await fetch(this.webAppUrl, {
         method: 'POST',
