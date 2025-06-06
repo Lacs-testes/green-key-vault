@@ -1,12 +1,4 @@
-
-interface CompanyRecord {
-  id: string;
-  companyName: string;
-  username: string;
-  password: string;
-  createdAt: string;
-  updatedAt?: string;
-}
+import { CompanyRecord } from '@/types/company';
 
 class GoogleSheetsService {
   private webAppUrl: string = 'https://script.google.com/macros/s/AKfycbzsmNInj8mcx-Ih5bk8Hgz-bINozph-eRQpt3dPnkREbzONUhiwvmiie4ZvDokV9PU2GQ/exec';
