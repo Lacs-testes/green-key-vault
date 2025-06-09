@@ -3,6 +3,9 @@ import { useState, useCallback } from 'react';
 import { CompanyRecord } from '@/types/company';
 import { useToast } from '@/hooks/use-toast';
 
+// URL do webhook do Make/N8N - substitua pela sua URL real
+const WEBHOOK_URL = 'https://hook.eu2.make.com/SEU_WEBHOOK_AQUI';
+
 export const useGoogleSheets = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -17,6 +20,31 @@ export const useGoogleSheets = () => {
     const updatedHistory = [record, ...localHistory];
     localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
     return updatedHistory;
+  };
+
+  const sendToWebhook = async (record: CompanyRecord, action: 'create' | 'update' | 'delete') => {
+    try {
+      const response = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action,
+          record,
+          timestamp: new Date().toISOString()
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Webhook error: ${response.status}`);
+      }
+
+      console.log(`Webhook enviado com sucesso para ${action}:`, record);
+    } catch (error) {
+      console.error('Erro ao enviar webhook:', error);
+      // Não vamos mostrar erro para o usuário, apenas loggar
+    }
   };
 
   const loadRecords = useCallback(async (): Promise<CompanyRecord[]> => {
@@ -35,9 +63,13 @@ export const useGoogleSheets = () => {
 
   const saveRecord = useCallback(async (record: CompanyRecord): Promise<CompanyRecord> => {
     saveToLocalStorage(record);
+    
+    // Enviar para webhook em background
+    sendToWebhook(record, 'create');
+    
     toast({
       title: "Salvo",
-      description: "Credenciais salvas localmente.",
+      description: "Credenciais salvas e enviadas para a planilha.",
     });
     return record;
   }, [toast]);
@@ -45,8 +77,14 @@ export const useGoogleSheets = () => {
   const deleteRecord = useCallback(async (id: string): Promise<void> => {
     try {
       const localHistory = getLocalHistory();
+      const recordToDelete = localHistory.find(record => record.id === id);
       const updatedHistory = localHistory.filter(record => record.id !== id);
       localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
+      
+      // Enviar para webhook em background
+      if (recordToDelete) {
+        sendToWebhook(recordToDelete, 'delete');
+      }
       
       toast({
         title: "Excluído",
@@ -75,6 +113,9 @@ export const useGoogleSheets = () => {
         record.id === recordWithUpdateTime.id ? recordWithUpdateTime : record
       );
       localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
+      
+      // Enviar para webhook em background
+      sendToWebhook(recordWithUpdateTime, 'update');
       
       toast({
         title: "Atualizado",
