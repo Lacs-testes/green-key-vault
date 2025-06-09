@@ -7,9 +7,6 @@ export const useGoogleSheets = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  // URL do Make configurada diretamente
-  const MAKE_WEBHOOK_URL = 'https://hook.us2.make.com/bou3j5jjan3ypy6d1rgugo3g48bc7kil';
-
   const getLocalHistory = (): CompanyRecord[] => {
     const stored = localStorage.getItem('companyHistory');
     return stored ? JSON.parse(stored) : [];
@@ -22,109 +19,34 @@ export const useGoogleSheets = () => {
     return updatedHistory;
   };
 
-  const sendToMake = async (record: CompanyRecord, action: 'create' | 'update' | 'delete') => {
-    try {
-      const payload = {
-        action,
-        record,
-        timestamp: new Date().toISOString(),
-        source: 'credential-generator'
-      };
-
-      const response = await fetch(MAKE_WEBHOOK_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        console.log('Dados enviados para Make com sucesso');
-        toast({
-          title: "Sincronizado",
-          description: "Dados enviados para a planilha com sucesso!",
-        });
-      } else {
-        throw new Error(`Erro HTTP: ${response.status}`);
-      }
-    } catch (error) {
-      console.error('Erro ao enviar para Make:', error);
-      toast({
-        title: "Aviso",
-        description: "Dados salvos localmente. Verifique a conexão com a planilha.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const loadRecordsFromSheet = async (): Promise<CompanyRecord[]> => {
-    try {
-      // Envia requisição GET para buscar dados da planilha via Make
-      const response = await fetch(`${MAKE_WEBHOOK_URL}?action=getRecords`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return Array.isArray(data) ? data : data.records || [];
-      } else {
-        throw new Error('Erro ao buscar dados da planilha');
-      }
-    } catch (error) {
-      console.error('Erro ao carregar da planilha:', error);
-      // Fallback para localStorage se não conseguir acessar a planilha
-      return getLocalHistory();
-    }
-  };
-
   const loadRecords = useCallback(async (): Promise<CompanyRecord[]> => {
     setIsLoading(true);
     try {
-      // Primeiro tenta buscar da planilha
-      const sheetRecords = await loadRecordsFromSheet();
-      
-      if (sheetRecords.length > 0) {
-        // Atualiza localStorage com dados da planilha
-        localStorage.setItem('companyHistory', JSON.stringify(sheetRecords));
-        return sheetRecords;
-      } else {
-        // Se não há dados na planilha, usa localStorage
-        return getLocalHistory();
-      }
+      // Simula um pequeno delay para mostrar o loading
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return getLocalHistory();
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
-      return getLocalHistory();
+      return [];
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   const saveRecord = useCallback(async (record: CompanyRecord): Promise<CompanyRecord> => {
-    // Salva localmente primeiro
     saveToLocalStorage(record);
-    
-    // Envia para Make/planilha
-    await sendToMake(record, 'create');
-    
+    toast({
+      title: "Salvo",
+      description: "Credenciais salvas localmente.",
+    });
     return record;
-  }, []);
+  }, [toast]);
 
   const deleteRecord = useCallback(async (id: string): Promise<void> => {
     try {
-      // Remove do localStorage
       const localHistory = getLocalHistory();
       const updatedHistory = localHistory.filter(record => record.id !== id);
       localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
-      
-      // Encontra o registro para enviar ao Make
-      const recordToDelete = localHistory.find(record => record.id === id);
-      if (recordToDelete) {
-        await sendToMake(recordToDelete, 'delete');
-      }
       
       toast({
         title: "Excluído",
@@ -139,7 +61,7 @@ export const useGoogleSheets = () => {
       });
       throw error;
     }
-  }, []);
+  }, [toast]);
 
   const updateRecord = useCallback(async (updatedRecord: CompanyRecord): Promise<CompanyRecord> => {
     const recordWithUpdateTime = {
@@ -148,15 +70,11 @@ export const useGoogleSheets = () => {
     };
 
     try {
-      // Atualiza no localStorage
       const localHistory = getLocalHistory();
       const updatedHistory = localHistory.map(record => 
         record.id === recordWithUpdateTime.id ? recordWithUpdateTime : record
       );
       localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
-      
-      // Envia para Make
-      await sendToMake(recordWithUpdateTime, 'update');
       
       toast({
         title: "Atualizado",
@@ -172,7 +90,7 @@ export const useGoogleSheets = () => {
       });
       throw error;
     }
-  }, []);
+  }, [toast]);
 
   return {
     isLoading,
