@@ -5,6 +5,7 @@ import CredentialsDisplay from '@/components/CredentialsDisplay';
 import HistorySection from '@/components/HistorySection';
 import WelcomeCard from '@/components/WelcomeCard';
 import AppHeader from '@/components/AppHeader';
+import WebhookConfig from '@/components/WebhookConfig';
 import { useCompanyRecords } from '@/hooks/useCompanyRecords';
 
 const Index = () => {
@@ -38,6 +39,8 @@ const Index = () => {
           {/* Formulário Principal */}
           <div className="space-y-6">
             <CompanyForm onSubmit={onCompanySubmit} />
+            
+            <WebhookConfig />
             
             <HistorySection
               showHistory={showHistory}
