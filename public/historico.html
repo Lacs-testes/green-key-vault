@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -52,7 +53,7 @@
                     <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                     </svg>
-                    <span class="text-green-800 font-medium">Dados sincronizados com Google Sheets via Apps Script</span>
+                    <span class="text-green-800 font-medium">Dados sincronizados com Google Sheets via Make</span>
                 </div>
             </div>
         </div>
@@ -104,6 +105,9 @@
     <div id="toastContainer" class="fixed top-4 right-4 z-50"></div>
 
     <script>
+        // URL do Make configurada diretamente
+        const MAKE_WEBHOOK_URL = 'https://hook.us2.make.com/bou3j5jjan3ypy6d1rgugo3g48bc7kil';
+
         // Função para mostrar toast
         function showToast(message, type = 'success') {
             const toastContainer = document.getElementById('toastContainer');
@@ -140,57 +144,56 @@
             return new Date(dateString).toLocaleString('pt-BR');
         }
 
-        // Serviço do Google Sheets via Apps Script
-        class GoogleSheetsService {
-            constructor() {
-                this.webAppUrl = 'https://script.google.com/macros/s/AKfycbzsmNInj8mcx-Ih5bk8Hgz-bINozph-eRQpt3dPnkREbzONUhiwvmiie4ZvDokV9PU2GQ/exec';
-            }
-
+        // Serviço do Make para Google Sheets
+        class MakeGoogleSheetsService {
             async getAllRecords() {
-                const response = await fetch(`${this.webAppUrl}?action=getRecords`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                });
+                try {
+                    const response = await fetch(`${MAKE_WEBHOOK_URL}?action=getRecords`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                    });
 
-                if (!response.ok) {
-                    throw new Error(`Erro na requisição: ${response.statusText}`);
+                    if (!response.ok) {
+                        throw new Error(`Erro na requisição: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    return Array.isArray(data) ? data : data.records || [];
+                } catch (error) {
+                    console.error('Erro ao buscar dados via Make:', error);
+                    // Fallback para localStorage
+                    return this.getLocalHistory();
                 }
-
-                const data = await response.json();
-                return data.records || [];
             }
 
             async deleteRecord(id) {
-                const response = await fetch(this.webAppUrl, {
+                const response = await fetch(MAKE_WEBHOOK_URL, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        action: 'deleteRecord',
-                        id: id
+                        action: 'delete',
+                        record: { id: id },
+                        timestamp: new Date().toISOString(),
+                        source: 'credential-generator'
                     }),
                 });
 
                 if (!response.ok) {
                     throw new Error(`Erro na requisição: ${response.statusText}`);
                 }
+            }
 
-                const result = await response.json();
-                if (!result.success) {
-                    throw new Error(result.error || 'Erro ao deletar registro');
-                }
+            getLocalHistory() {
+                const stored = localStorage.getItem('companyHistory');
+                return stored ? JSON.parse(stored) : [];
             }
         }
 
-        const googleSheetsService = new GoogleSheetsService();
-
-        function getLocalHistory() {
-            const stored = localStorage.getItem('companyHistory');
-            return stored ? JSON.parse(stored) : [];
-        }
+        const makeService = new MakeGoogleSheetsService();
 
         async function loadHistory() {
             const loadingState = document.getElementById('loadingState');
@@ -204,11 +207,17 @@
             let history = [];
 
             try {
-                history = await googleSheetsService.getAllRecords();
+                // Busca primeiro da planilha via Make
+                history = await makeService.getAllRecords();
+                if (history.length > 0) {
+                    showToast('Dados carregados da planilha via Make!');
+                }
             } catch (error) {
-                console.error('Erro ao carregar do Google Sheets:', error);
-                history = getLocalHistory();
-                showToast('Carregando dados locais. Verifique a conexão com Google Sheets.', 'error');
+                console.error('Erro ao carregar do Make:', error);
+                history = makeService.getLocalHistory();
+                if (history.length > 0) {
+                    showToast('Carregando dados locais. Verifique a conexão com Make.', 'error');
+                }
             }
 
             loadingState.classList.add('hidden');
@@ -235,10 +244,9 @@
                             <div class="text-sm text-gray-600 space-y-1">
                                 <p><strong>Gerado em:</strong> ${formatDate(record.createdAt)}</p>
                                 ${record.updatedAt ? `<p><strong>Última alteração:</strong> ${formatDate(record.updatedAt)}</p>` : ''}
-                                ${isGoogleSheetsEnabled ? '<p class="text-green-600"><strong>Fonte:</strong> Google Sheets (Apps Script)</p>' : '<p class="text-gray-500"><strong>Fonte:</strong> Armazenamento local</p>'}
+                                <p class="text-green-600"><strong>Fonte:</strong> Google Sheets via Make</p>
                             </div>
                         </div>
-                        ${isGoogleSheetsEnabled ? `
                         <button 
                             onclick="deleteRecord('${record.id}', '${record.companyName}')"
                             class="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition-colors"
@@ -248,17 +256,6 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                             </svg>
                         </button>
-                        ` : `
-                        <button 
-                            onclick="deleteLocalRecord('${record.id}', '${record.companyName}')"
-                            class="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition-colors"
-                            title="Excluir registro"
-                        >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                            </svg>
-                        </button>
-                        `}
                     </div>
 
                     <div class="grid md:grid-cols-2 gap-4">
@@ -331,23 +328,13 @@
         async function deleteRecord(id, companyName) {
             if (confirm(`Tem certeza que deseja excluir "${companyName}"?`)) {
                 try {
-                    await googleSheetsService.deleteRecord(id);
+                    await makeService.deleteRecord(id);
                     showToast('Registro excluído com sucesso!');
                     loadHistory();
                 } catch (error) {
                     console.error('Erro ao excluir:', error);
                     showToast('Erro ao excluir registro.', 'error');
                 }
-            }
-        }
-
-        function deleteLocalRecord(id, companyName) {
-            if (confirm(`Tem certeza que deseja excluir "${companyName}"?`)) {
-                const history = getLocalHistory();
-                const updatedHistory = history.filter(record => record.id !== id);
-                localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
-                showToast('Registro excluído com sucesso!');
-                loadHistory();
             }
         }
 

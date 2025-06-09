@@ -7,6 +7,9 @@ export const useGoogleSheets = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
+  // URL do Make configurada diretamente
+  const MAKE_WEBHOOK_URL = 'https://hook.us2.make.com/bou3j5jjan3ypy6d1rgugo3g48bc7kil';
+
   const getLocalHistory = (): CompanyRecord[] => {
     const stored = localStorage.getItem('companyHistory');
     return stored ? JSON.parse(stored) : [];
@@ -19,14 +22,7 @@ export const useGoogleSheets = () => {
     return updatedHistory;
   };
 
-  const sendToWebhook = async (record: CompanyRecord, action: 'create' | 'update' | 'delete') => {
-    const webhookUrl = localStorage.getItem('webhookUrl');
-    
-    if (!webhookUrl) {
-      console.log('Webhook URL não configurada, salvando apenas localmente');
-      return;
-    }
-
+  const sendToMake = async (record: CompanyRecord, action: 'create' | 'update' | 'delete') => {
     try {
       const payload = {
         action,
@@ -35,7 +31,7 @@ export const useGoogleSheets = () => {
         source: 'credential-generator'
       };
 
-      const response = await fetch(webhookUrl, {
+      const response = await fetch(MAKE_WEBHOOK_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -44,7 +40,7 @@ export const useGoogleSheets = () => {
       });
 
       if (response.ok) {
-        console.log('Dados enviados para webhook com sucesso');
+        console.log('Dados enviados para Make com sucesso');
         toast({
           title: "Sincronizado",
           description: "Dados enviados para a planilha com sucesso!",
@@ -53,7 +49,7 @@ export const useGoogleSheets = () => {
         throw new Error(`Erro HTTP: ${response.status}`);
       }
     } catch (error) {
-      console.error('Erro ao enviar para webhook:', error);
+      console.error('Erro ao enviar para Make:', error);
       toast({
         title: "Aviso",
         description: "Dados salvos localmente. Verifique a conexão com a planilha.",
@@ -62,15 +58,46 @@ export const useGoogleSheets = () => {
     }
   };
 
+  const loadRecordsFromSheet = async (): Promise<CompanyRecord[]> => {
+    try {
+      // Envia requisição GET para buscar dados da planilha via Make
+      const response = await fetch(`${MAKE_WEBHOOK_URL}?action=getRecords`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return Array.isArray(data) ? data : data.records || [];
+      } else {
+        throw new Error('Erro ao buscar dados da planilha');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar da planilha:', error);
+      // Fallback para localStorage se não conseguir acessar a planilha
+      return getLocalHistory();
+    }
+  };
+
   const loadRecords = useCallback(async (): Promise<CompanyRecord[]> => {
     setIsLoading(true);
     try {
-      // Sempre carrega do localStorage
-      const records = getLocalHistory();
-      return records;
+      // Primeiro tenta buscar da planilha
+      const sheetRecords = await loadRecordsFromSheet();
+      
+      if (sheetRecords.length > 0) {
+        // Atualiza localStorage com dados da planilha
+        localStorage.setItem('companyHistory', JSON.stringify(sheetRecords));
+        return sheetRecords;
+      } else {
+        // Se não há dados na planilha, usa localStorage
+        return getLocalHistory();
+      }
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
-      return [];
+      return getLocalHistory();
     } finally {
       setIsLoading(false);
     }
@@ -80,8 +107,8 @@ export const useGoogleSheets = () => {
     // Salva localmente primeiro
     saveToLocalStorage(record);
     
-    // Tenta enviar para webhook
-    await sendToWebhook(record, 'create');
+    // Envia para Make/planilha
+    await sendToMake(record, 'create');
     
     return record;
   }, []);
@@ -93,10 +120,10 @@ export const useGoogleSheets = () => {
       const updatedHistory = localHistory.filter(record => record.id !== id);
       localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
       
-      // Encontra o registro para enviar ao webhook
+      // Encontra o registro para enviar ao Make
       const recordToDelete = localHistory.find(record => record.id === id);
       if (recordToDelete) {
-        await sendToWebhook(recordToDelete, 'delete');
+        await sendToMake(recordToDelete, 'delete');
       }
       
       toast({
@@ -128,8 +155,8 @@ export const useGoogleSheets = () => {
       );
       localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
       
-      // Envia para webhook
-      await sendToWebhook(recordWithUpdateTime, 'update');
+      // Envia para Make
+      await sendToMake(recordWithUpdateTime, 'update');
       
       toast({
         title: "Atualizado",
