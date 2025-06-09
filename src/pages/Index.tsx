@@ -10,7 +10,6 @@ import { useCompanyRecords } from '@/hooks/useCompanyRecords';
 
 const Index = () => {
   const [showHistory, setShowHistory] = useState(false);
-  const [webhookConfigured, setWebhookConfigured] = useState(false);
   const {
     currentRecord,
     history,
@@ -41,7 +40,7 @@ const Index = () => {
           <div className="space-y-6">
             <CompanyForm onSubmit={onCompanySubmit} />
             
-            <WebhookConfig onConfigChange={setWebhookConfigured} />
+            <WebhookConfig />
             
             <HistorySection
               showHistory={showHistory}

@@ -3,9 +3,6 @@ import { useState, useCallback } from 'react';
 import { CompanyRecord } from '@/types/company';
 import { useToast } from '@/hooks/use-toast';
 
-// URL do webhook do Make/N8N - substitua pela sua URL real
-const WEBHOOK_URL = 'https://hook.eu2.make.com/SEU_WEBHOOK_AQUI';
-
 export const useGoogleSheets = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -23,36 +20,54 @@ export const useGoogleSheets = () => {
   };
 
   const sendToWebhook = async (record: CompanyRecord, action: 'create' | 'update' | 'delete') => {
+    const webhookUrl = localStorage.getItem('webhookUrl');
+    
+    if (!webhookUrl) {
+      console.log('Webhook URL não configurada, salvando apenas localmente');
+      return;
+    }
+
     try {
-      const response = await fetch(WEBHOOK_URL, {
+      const payload = {
+        action,
+        record,
+        timestamp: new Date().toISOString(),
+        source: 'credential-generator'
+      };
+
+      const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          action,
-          record,
-          timestamp: new Date().toISOString()
-        }),
+        body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        throw new Error(`Webhook error: ${response.status}`);
+      if (response.ok) {
+        console.log('Dados enviados para webhook com sucesso');
+        toast({
+          title: "Sincronizado",
+          description: "Dados enviados para a planilha com sucesso!",
+        });
+      } else {
+        throw new Error(`Erro HTTP: ${response.status}`);
       }
-
-      console.log(`Webhook enviado com sucesso para ${action}:`, record);
     } catch (error) {
-      console.error('Erro ao enviar webhook:', error);
-      // Não vamos mostrar erro para o usuário, apenas loggar
+      console.error('Erro ao enviar para webhook:', error);
+      toast({
+        title: "Aviso",
+        description: "Dados salvos localmente. Verifique a conexão com a planilha.",
+        variant: "destructive",
+      });
     }
   };
 
   const loadRecords = useCallback(async (): Promise<CompanyRecord[]> => {
     setIsLoading(true);
     try {
-      // Simula um pequeno delay para mostrar o loading
-      await new Promise(resolve => setTimeout(resolve, 500));
-      return getLocalHistory();
+      // Sempre carrega do localStorage
+      const records = getLocalHistory();
+      return records;
     } catch (error) {
       console.error('Erro ao carregar histórico:', error);
       return [];
@@ -62,28 +77,26 @@ export const useGoogleSheets = () => {
   }, []);
 
   const saveRecord = useCallback(async (record: CompanyRecord): Promise<CompanyRecord> => {
+    // Salva localmente primeiro
     saveToLocalStorage(record);
     
-    // Enviar para webhook em background
-    sendToWebhook(record, 'create');
+    // Tenta enviar para webhook
+    await sendToWebhook(record, 'create');
     
-    toast({
-      title: "Salvo",
-      description: "Credenciais salvas e enviadas para a planilha.",
-    });
     return record;
-  }, [toast]);
+  }, []);
 
   const deleteRecord = useCallback(async (id: string): Promise<void> => {
     try {
+      // Remove do localStorage
       const localHistory = getLocalHistory();
-      const recordToDelete = localHistory.find(record => record.id === id);
       const updatedHistory = localHistory.filter(record => record.id !== id);
       localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
       
-      // Enviar para webhook em background
+      // Encontra o registro para enviar ao webhook
+      const recordToDelete = localHistory.find(record => record.id === id);
       if (recordToDelete) {
-        sendToWebhook(recordToDelete, 'delete');
+        await sendToWebhook(recordToDelete, 'delete');
       }
       
       toast({
@@ -99,7 +112,7 @@ export const useGoogleSheets = () => {
       });
       throw error;
     }
-  }, [toast]);
+  }, []);
 
   const updateRecord = useCallback(async (updatedRecord: CompanyRecord): Promise<CompanyRecord> => {
     const recordWithUpdateTime = {
@@ -108,14 +121,15 @@ export const useGoogleSheets = () => {
     };
 
     try {
+      // Atualiza no localStorage
       const localHistory = getLocalHistory();
       const updatedHistory = localHistory.map(record => 
         record.id === recordWithUpdateTime.id ? recordWithUpdateTime : record
       );
       localStorage.setItem('companyHistory', JSON.stringify(updatedHistory));
       
-      // Enviar para webhook em background
-      sendToWebhook(recordWithUpdateTime, 'update');
+      // Envia para webhook
+      await sendToWebhook(recordWithUpdateTime, 'update');
       
       toast({
         title: "Atualizado",
@@ -131,7 +145,7 @@ export const useGoogleSheets = () => {
       });
       throw error;
     }
-  }, [toast]);
+  }, []);
 
   return {
     isLoading,

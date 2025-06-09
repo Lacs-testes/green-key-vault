@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -48,12 +47,12 @@
 
         <!-- Status da Integração -->
         <div class="mb-6">
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div class="flex items-center gap-2">
-                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                     </svg>
-                    <span class="text-blue-800 font-medium">Dados salvos localmente no navegador</span>
+                    <span class="text-green-800 font-medium">Dados sincronizados com Google Sheets via Apps Script</span>
                 </div>
             </div>
         </div>
@@ -141,6 +140,53 @@
             return new Date(dateString).toLocaleString('pt-BR');
         }
 
+        // Serviço do Google Sheets via Apps Script
+        class GoogleSheetsService {
+            constructor() {
+                this.webAppUrl = 'https://script.google.com/macros/s/AKfycbzsmNInj8mcx-Ih5bk8Hgz-bINozph-eRQpt3dPnkREbzONUhiwvmiie4ZvDokV9PU2GQ/exec';
+            }
+
+            async getAllRecords() {
+                const response = await fetch(`${this.webAppUrl}?action=getRecords`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro na requisição: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                return data.records || [];
+            }
+
+            async deleteRecord(id) {
+                const response = await fetch(this.webAppUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'deleteRecord',
+                        id: id
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Erro na requisição: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.error || 'Erro ao deletar registro');
+                }
+            }
+        }
+
+        const googleSheetsService = new GoogleSheetsService();
+
         function getLocalHistory() {
             const stored = localStorage.getItem('companyHistory');
             return stored ? JSON.parse(stored) : [];
@@ -155,10 +201,15 @@
             container.classList.add('hidden');
             emptyState.classList.add('hidden');
 
-            // Simula carregamento
-            await new Promise(resolve => setTimeout(resolve, 500));
+            let history = [];
 
-            const history = getLocalHistory();
+            try {
+                history = await googleSheetsService.getAllRecords();
+            } catch (error) {
+                console.error('Erro ao carregar do Google Sheets:', error);
+                history = getLocalHistory();
+                showToast('Carregando dados locais. Verifique a conexão com Google Sheets.', 'error');
+            }
 
             loadingState.classList.add('hidden');
 
@@ -184,9 +235,10 @@
                             <div class="text-sm text-gray-600 space-y-1">
                                 <p><strong>Gerado em:</strong> ${formatDate(record.createdAt)}</p>
                                 ${record.updatedAt ? `<p><strong>Última alteração:</strong> ${formatDate(record.updatedAt)}</p>` : ''}
-                                <p class="text-blue-600"><strong>Fonte:</strong> Armazenamento local</p>
+                                ${isGoogleSheetsEnabled ? '<p class="text-green-600"><strong>Fonte:</strong> Google Sheets (Apps Script)</p>' : '<p class="text-gray-500"><strong>Fonte:</strong> Armazenamento local</p>'}
                             </div>
                         </div>
+                        ${isGoogleSheetsEnabled ? `
                         <button 
                             onclick="deleteRecord('${record.id}', '${record.companyName}')"
                             class="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition-colors"
@@ -196,6 +248,17 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                             </svg>
                         </button>
+                        ` : `
+                        <button 
+                            onclick="deleteLocalRecord('${record.id}', '${record.companyName}')"
+                            class="text-red-500 hover:text-red-700 p-2 rounded hover:bg-red-50 transition-colors"
+                            title="Excluir registro"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                        `}
                     </div>
 
                     <div class="grid md:grid-cols-2 gap-4">
@@ -265,7 +328,20 @@
             `).join('');
         }
 
-        function deleteRecord(id, companyName) {
+        async function deleteRecord(id, companyName) {
+            if (confirm(`Tem certeza que deseja excluir "${companyName}"?`)) {
+                try {
+                    await googleSheetsService.deleteRecord(id);
+                    showToast('Registro excluído com sucesso!');
+                    loadHistory();
+                } catch (error) {
+                    console.error('Erro ao excluir:', error);
+                    showToast('Erro ao excluir registro.', 'error');
+                }
+            }
+        }
+
+        function deleteLocalRecord(id, companyName) {
             if (confirm(`Tem certeza que deseja excluir "${companyName}"?`)) {
                 const history = getLocalHistory();
                 const updatedHistory = history.filter(record => record.id !== id);
@@ -276,6 +352,7 @@
         }
 
         document.addEventListener('DOMContentLoaded', loadHistory);
+        setInterval(loadHistory, 30000); // Atualizar a cada 30 segundos
     </script>
 </body>
 </html>
